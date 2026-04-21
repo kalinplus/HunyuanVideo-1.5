@@ -14,6 +14,7 @@
 # of rights and permissions under this agreement.
 # See the License for the specific language governing permissions and limitations under the License.
 
+import os
 from typing import Optional
 from dataclasses import dataclass, field
 
@@ -30,6 +31,12 @@ class InferState:
     cache_end_step: int = 45 # end step to skip
     total_steps: int = 50 # total steps
     cache_step_interval: int = 4 # step interval to skip
+
+    # taylorcache specific
+    taylor_max_order: int = 2
+    taylor_low_freqs_order: int = 2
+    taylor_high_freqs_order: int = 2
+    taylor_cutoff_ratio: float = 0.1
 
     use_fp8_gemm: bool = False  # whether to use fp8 gemm
     quant_type: str = "fp8-per-token-sgl"  # fp8 quantization type
@@ -48,8 +55,8 @@ def parse_range(value):
 
 def initialize_infer_state(args):
     global __infer_state
-    sage_blocks_range = parse_range(args.sage_blocks_range)
-    no_cache_block_id = parse_range(args.no_cache_block_id)
+    sage_blocks_range = parse_range(getattr(args, 'sage_blocks_range', '0-59'))
+    no_cache_block_id = parse_range(getattr(args, 'no_cache_block_id', '53'))
     # Map CLI argument use_sageattn to internal enable_sageattn field
     use_sageattn = getattr(args, 'use_sageattn', False)
 
@@ -66,21 +73,27 @@ def initialize_infer_state(args):
     __infer_state = InferState(
         enable_sageattn = use_sageattn,
         sage_blocks_range = sage_blocks_range,
-        enable_torch_compile = args.enable_torch_compile,
+        enable_torch_compile = getattr(args, 'enable_torch_compile', False),
 
         # cache related
-        enable_cache = args.enable_cache,
-        cache_type = args.cache_type,
+        enable_cache = getattr(args, 'enable_cache', False),
+        cache_type = getattr(args, 'cache_type', 'deepcache'),
         no_cache_block_id = no_cache_block_id,
-        cache_start_step = args.cache_start_step,
-        cache_end_step = args.cache_end_step,
-        total_steps = args.total_steps,
-        cache_step_interval = args.cache_step_interval,
+        cache_start_step = getattr(args, 'cache_start_step', 11),
+        cache_end_step = getattr(args, 'cache_end_step', 45),
+        total_steps = getattr(args, 'total_steps', 50),
+        cache_step_interval = getattr(args, 'cache_step_interval', 4),
 
         # fp8 gemm related
-        use_fp8_gemm = args.use_fp8_gemm,
-        quant_type = args.quant_type,
+        use_fp8_gemm = getattr(args, 'use_fp8_gemm', False),
+        quant_type = getattr(args, 'quant_type', 'fp8-per-token-sgl'),
         include_patterns = include_patterns,
+
+        # taylorcache specific (env var > CLI arg > default)
+        taylor_max_order = int(os.getenv("TAYLOR_MAX_ORDER", str(getattr(args, 'taylor_max_order', 2)))),
+        taylor_low_freqs_order = int(os.getenv("TAYLOR_LOW_FREQS_ORDER", str(getattr(args, 'taylor_low_freqs_order', 2)))),
+        taylor_high_freqs_order = int(os.getenv("TAYLOR_HIGH_FREQS_ORDER", str(getattr(args, 'taylor_high_freqs_order', 2)))),
+        taylor_cutoff_ratio = float(os.getenv("TAYLOR_CUTOFF_RATIO", str(getattr(args, 'taylor_cutoff_ratio', 0.1)))),
     )
     return __infer_state
 

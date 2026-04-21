@@ -419,6 +419,22 @@ def main():
         help='Step interval to skip when using cache (default: 4)'
     )
     parser.add_argument(
+        '--taylor_max_order', type=int, default=2,
+        help='Maximum Taylor expansion order for TaylorCache (default: 2). Can be overridden by TAYLOR_MAX_ORDER env var.'
+    )
+    parser.add_argument(
+        '--taylor_low_freqs_order', type=int, default=2,
+        help='Derivative order for low-frequency band in TaylorCache (default: 2). Can be overridden by TAYLOR_LOW_FREQS_ORDER env var.'
+    )
+    parser.add_argument(
+        '--taylor_high_freqs_order', type=int, default=2,
+        help='Derivative order for high-frequency band in TaylorCache (default: 2). Can be overridden by TAYLOR_HIGH_FREQS_ORDER env var.'
+    )
+    parser.add_argument(
+        '--taylor_cutoff_ratio', type=float, default=0.1,
+        help='FFT frequency cutoff ratio for TaylorCache (default: 0.1). Can be overridden by TAYLOR_CUTOFF_RATIO env var.'
+    )
+    parser.add_argument(
         '--save_generation_config', type=str_to_bool, nargs='?', const=True, default=True,
         help='Save generation config file (default: true). '
              'Use --save_generation_config or --save_generation_config true/1 to enable, '

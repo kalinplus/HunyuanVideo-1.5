@@ -1386,13 +1386,43 @@ class HunyuanVideo_1_5_Pipeline(DiffusionPipeline):
                         no_cache_steps=no_cache_steps,
                     )
                 elif cache_type == 'taylorcache':
+                    print(f"[TaylorCache] max_order={infer_state.taylor_max_order}, "
+                          f"low_freqs_order={infer_state.taylor_low_freqs_order}, "
+                          f"high_freqs_order={infer_state.taylor_high_freqs_order}, "
+                          f"cutoff_ratio={infer_state.taylor_cutoff_ratio}")
                     self.cache_helper = TaylorCacheHelper(
                         double_blocks=self.transformer.double_blocks,
                         no_cache_steps=no_cache_steps,
+                        max_order=infer_state.taylor_max_order,
+                        low_freqs_order=infer_state.taylor_low_freqs_order,
+                        high_freqs_order=infer_state.taylor_high_freqs_order,
                     )
                 else:
                     raise ValueError(f"Unknown cache type: {cache_type}. Only 'deepcache', 'teacache', 'taylorcache' are supported.")
                 self.cache_helper.enable()
+
+                # Patch cutoff_ratio for TaylorCache (not a constructor param in angelslim)
+                if cache_type == 'taylorcache' and infer_state.taylor_cutoff_ratio != 0.1:
+                    from angelslim.compressor.diffusion.cache.taylorcache_helper import decomposition_FFT
+                    print(f"[TaylorCache] Patching cutoff_ratio={infer_state.taylor_cutoff_ratio}")
+                    _taylor_cache = self.cache_helper.taylor_cache
+                    _ratio = infer_state.taylor_cutoff_ratio
+
+                    def _patched_derivatives_computation(x, distance, low_freqs_order, high_freqs_order):
+                        x_low, x_high = decomposition_FFT(x, cutoff_ratio=_ratio)
+                        _taylor_cache.set_temp_derivative(0, "low_freqs", x_low)
+                        _taylor_cache.set_temp_derivative(0, "high_freqs", x_high)
+                        for i in range(low_freqs_order):
+                            if _taylor_cache.get_derivative(i, "low_freqs") is not None:
+                                diff = _taylor_cache.get_temp_derivative(i, "low_freqs") - _taylor_cache.get_derivative(i, "low_freqs")
+                                _taylor_cache.set_temp_derivative(i + 1, "low_freqs", diff / distance)
+                        for i in range(high_freqs_order):
+                            if _taylor_cache.get_derivative(i, "high_freqs") is not None:
+                                diff = _taylor_cache.get_temp_derivative(i, "high_freqs") - _taylor_cache.get_derivative(i, "high_freqs")
+                                _taylor_cache.set_temp_derivative(i + 1, "high_freqs", diff / distance)
+                        _taylor_cache.move_temp_to_derivative()
+
+                    _taylor_cache.derivatives_computation = _patched_derivatives_computation
             else:
                 self.cache_helper = None
         else:
